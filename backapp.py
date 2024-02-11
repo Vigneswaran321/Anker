@@ -1,4 +1,4 @@
-from flask import Flask, render_template, send_file, send_from_directory
+from flask import Flask, render_template, send_file
 import requests
 from bs4 import BeautifulSoup
 import openai
@@ -52,10 +52,6 @@ def video():
     # Path to your video file
     video_path = 'result_video.mp4'
     return send_file(video_path, as_attachment=True)
-
-@app.route('/video/<path:filename>')
-def serve_video(filename):
-    return send_from_directory('static', filename)
 
 if __name__ == '__main__':
     app.run(debug=True)
