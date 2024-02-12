@@ -97,7 +97,7 @@ def generate_news_audio(headline):
     completion = client.chat.completions.create(
         model="gpt-3.5-turbo-0125",
         messages=[
-            {"role": "system", "content": "You are a AI News Anchor acting similar like a human in a way that cannot be easily detected by the way of speaking and generate the content in englis like a news anchor based upon the headlines received."},
+            {"role": "system", "content": "You are a AI News Anchor acting similar like a human in a way that cannot be easily detected by the way of speaking and generate the content like a news anchor based upon the headlines received."},
             {"role": "user", "content": headline}
         ]
     )
@@ -117,7 +117,7 @@ def download_video(url, filename):
 
 
 # Path to the folder containing video files
-folder_path = 'static'
+folder_path = 'headlines'
 # List all files in the folder
 video_files = [f for f in os.listdir(
     folder_path) if os.path.isfile(os.path.join(folder_path, f))]
