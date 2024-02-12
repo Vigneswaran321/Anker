@@ -139,7 +139,7 @@ def video():
     next_video = video_queue.pop(0)
     # Path to the next video file
     video_path = os.path.join(folder_path, next_video)
-    return stream_with_context(play_video(video_path))
+    return play_video(video_path)
 
 
 def play_video(video_path):
