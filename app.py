@@ -1,4 +1,4 @@
-from flask import Flask, render_template, send_file, send_from_directory, stream_with_context
+from flask import Flask, render_template, send_file, send_from_directory, stream_with_context, Response
 import requests
 from bs4 import BeautifulSoup
 import openai
@@ -116,16 +116,11 @@ def download_video(url, filename):
         f.write(response.content)
 
 
-# Path to the folder containing video files
-folder_path = 'headlines'
-# List all files in the folder
-video_files = [f for f in os.listdir(
-    folder_path) if os.path.isfile(os.path.join(folder_path, f))]
-# Shuffle the list to play files in random order
-random.shuffle(video_files)
-# Convert list to queue for FIFO behavior
-video_queue = video_files.copy()
-
+def get_video_url(filename):
+    # Implement the logic to get the video URL from Vercel Blob Storage
+    # This might involve authentication and making a request to Vercel's API
+    # Return the URL of the video file
+    return f"https://a4epxkctpsdod9gr.public.blob.vercel-storage.com/ad-8SqF8NUAatpY5cBlyVO669viNoGG5q.mp4"
 
 @app.route('/video')
 def video():
@@ -137,19 +132,12 @@ def video():
 
     # Get the next video file from the queue
     next_video = video_queue.pop(0)
-    # Path to the next video file
-    video_path = os.path.join(folder_path, next_video)
-    return play_video(video_path)
-
-
-def play_video(video_path):
-    with open(video_path, 'rb') as f:
-        while True:
-            # Read 1MB of data from the video file
-            chunk = f.read(1024*1024)
-            if not chunk:
-                break
-            yield chunk
+    # Assuming you have a function to get the video URL from Vercel Blob Storage
+    video_url = get_video_url(next_video)
+    
+    # Stream the video from the URL
+    response = requests.get(video_url, stream=True)
+    return Response(response.iter_content(chunk_size=1024), content_type=response.headers['content-type'])
 
 
 @app.route('/video/<path:filename>')
