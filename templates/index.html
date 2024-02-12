@@ -8,7 +8,8 @@
 </head>
 
 <body bgcolor="black">
-    <h1 style="color: white; font-weight: bold; text-align: center; font-family: sans-serif;">PR NEWS 24x7 LIVESTREAM</h1>
+    <h1 style="color: white; font-weight: bold; text-align: center; font-family: sans-serif;">PR NEWS 24x7 LIVESTREAM
+    </h1>
     <video id="videoPlayer" controls autoplay
         style="width: auto; height: auto; display: block; margin: 0 auto; border-radius: 25px;">
         <source src="/video" type="video/mp4">
@@ -25,7 +26,7 @@
         }
 
         // Listen for the 'ended' event of the video element and reload the video when it ends
-        document.getElementById('videoPlayer').addEventListener('ended', function() {
+        document.getElementById('videoPlayer').addEventListener('ended', function () {
             reloadVideo();
         });
     </script>
