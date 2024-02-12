@@ -1,4 +1,4 @@
-from flask import Flask, render_template, send_file, Response, send_from_directory, stream_with_context
+from flask import Flask, render_template, send_file, send_from_directory, stream_with_context
 import requests
 from bs4 import BeautifulSoup
 import openai
@@ -139,7 +139,7 @@ def video():
     next_video = video_queue.pop(0)
     # Path to the next video file
     video_path = os.path.join(folder_path, next_video)
-    return Response(stream_with_context(play_video(video_path)), mimetype='video/mp4')
+    return stream_with_context(play_video(video_path))
 
 
 def play_video(video_path):
