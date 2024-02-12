@@ -1,4 +1,4 @@
-from flask import Flask, render_template, send_file, send_from_directory, stream_with_context, Response
+from flask import Flask, render_template, send_file, send_from_directory, stream_with_context
 import requests
 from bs4 import BeautifulSoup
 import openai
@@ -97,7 +97,7 @@ def generate_news_audio(headline):
     completion = client.chat.completions.create(
         model="gpt-3.5-turbo-0125",
         messages=[
-            {"role": "system", "content": "You are a AI News Anchor acting similar like a human in a way that cannot be easily detected by the way of speaking and generate the content in english like a news anchor based upon the headlines received."},
+            {"role": "system", "content": "You are a AI News Anchor acting similar like a human in a way that cannot be easily detected by the way of speaking and generate the content in englis like a news anchor based upon the headlines received."},
             {"role": "user", "content": headline}
         ]
     )
@@ -116,11 +116,16 @@ def download_video(url, filename):
         f.write(response.content)
 
 
-def get_video_url(filename):
-    # Implement the logic to get the video URL from Vercel Blob Storage
-    # This might involve authentication and making a request to Vercel's API
-    # Return the URL of the video file
-    return f"https://a4epxkctpsdod9gr.public.blob.vercel-storage.com/ad-8SqF8NUAatpY5cBlyVO669viNoGG5q.mp4"
+# Path to the folder containing video files
+folder_path = 'static'
+# List all files in the folder
+video_files = [f for f in os.listdir(
+    folder_path) if os.path.isfile(os.path.join(folder_path, f))]
+# Shuffle the list to play files in random order
+random.shuffle(video_files)
+# Convert list to queue for FIFO behavior
+video_queue = video_files.copy()
+
 
 @app.route('/video')
 def video():
@@ -132,12 +137,19 @@ def video():
 
     # Get the next video file from the queue
     next_video = video_queue.pop(0)
-    # Assuming you have a function to get the video URL from Vercel Blob Storage
-    video_url = get_video_url(next_video)
-    
-    # Stream the video from the URL
-    response = requests.get(video_url, stream=True)
-    return Response(response.iter_content(chunk_size=1024), content_type=response.headers['content-type'])
+    # Path to the next video file
+    video_path = os.path.join(folder_path, next_video)
+    return stream_with_context(play_video(video_path))
+
+
+def play_video(video_path):
+    with open(video_path, 'rb') as f:
+        while True:
+            # Read 1MB of data from the video file
+            chunk = f.read(1024*1024)
+            if not chunk:
+                break
+            yield chunk
 
 
 @app.route('/video/<path:filename>')
