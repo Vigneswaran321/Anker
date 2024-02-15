@@ -1,102 +1,106 @@
-from flask import Flask, render_template, send_file, send_from_directory, stream_with_context, redirect
+from flask import Flask, render_template, redirect, send_from_directory
 import requests
 from bs4 import BeautifulSoup
 import openai
+from flask_apscheduler import APScheduler
 import time
-import os
+import datetime
 import random
+import os
+
+
+class Config:
+    SCHEDULER_API_ENABLED = True
+
 
 app = Flask(__name__)
+app.config.from_object(Config())
+
+scheduler = APScheduler()
+scheduler.init_app(app)
+scheduler.start()
+
+latest_headline = {"text": "", "time": None}
+API_KEY = os.environ.get("API_SYNCLABS")  # Placeholder for your API key
+# List to store video URLs
+videos = ["https://synchlabs-public.s3.amazonaws.com/Data/job_90e70bb6-1b8e-44c7-bcef-d956a314d0b0/result_90e70bb6-1b8e-44c7-bcef-d956a314d0b0.mp4","https://a4epxkctpsdod9gr.public.blob.vercel-storage.com/ad-8SqF8NUAatpY5cBlyVO669viNoGG5q.mp4","https://a4epxkctpsdod9gr.public.blob.vercel-storage.com/breaking-9tiPcCIhStwsuM8O8ss8sECHs9KpR8.mp4","https://a4epxkctpsdod9gr.public.blob.vercel-storage.com/inro-hLIABzt8W1stSFKCnO6sk06X8lLuJa.mp4"]
+
+
+def scheduled_task():
+    global latest_headline
+    new_headline = get_latest_headline()
+    if new_headline:
+        audio_response = generate_news_audio(new_headline)
+        print(f"Generated audio for headline: {new_headline}")
+        audio_response.write_to_file('static\output.mp3')
+        audio_url = "https://anker-xi.vercel.app/video/output.mp3"
+        video_url = "https://anker-xi.vercel.app/video/input.mp4"
+        id = request_video_processing(audio_url, video_url)
+        while True:
+            status_response = requests.get(f'https://api.synclabs.so/video/{id}', headers={'x-api-key': API_KEY})
+            status = status_response.json().get('status')
+            if status == 'COMPLETED':
+                download_url = status_response.json().get('url')
+                manage_videos_list(download_url)
+                break
+            time.sleep(60)  # Check status every minute
+
+
+def manage_videos_list(download_url):
+    global videos
+    if len(videos) >= 14:
+        videos.pop(0)  # Remove the oldest URL
+    videos.append(download_url)
+    print(videos)  # Add the new URL
 
 
 @app.route('/')
 def index():
-    # Example of generating news content
-    # news_headlines = generate_news_content()
-    # # Select the first headline
-    # first_headline = news_headlines[0]
-    # # Generate audio for the first headline
-    # audio_response = generate_news_audio(first_headline)
-    # audio_response.write_to_file('static\output.mp3')
-    # video_id = request_video_processing()
-    # print(video_id)
-    # url = f"https://api.d-id.com/clips/{video_id}"
-    # headers = {
-    #     "accept": "application/json",
-    #     "authorization": "Basic Y21WaGNHVnla
-    # timeout = 60  # Set a timeout of 60 seconds
-    # start_time = time.time()
-
-    # while True:
-    #     if time.time() - start_time > timeout:
-    #         return "Video processing timed out."
-        
-    #     response = requests.get(url, headers=headers)
-    #     response.raise_for_status()
-    #     response_data = response.json()
-        
-    #     result_url = response_data.get('result_url')
-    #     if result_url:
-    #         download_video(result_url, os.path.join('headlines', f'result_video_{i}.mp4'))
-    #         i += 1
-    #         break
-    #     else:
-    #         time.sleep(10)  # Wait for 5 seconds before checking again
     return render_template('index.html')
 
 
-def request_video_processing():
-    url = "https://api.d-id.com/clips"
-
-    payload = {
-        "script": {
-            "type": "audio",
-            "subtitles": "false",
-            "provider": {
-                "type": "microsoft",
-                "voice_id": "en-US-JennyNeural"
-            },
-            "ssml": "false",
-            "audio_url": "https://anker-xi.vercel.app/video/output.mp3"
-        },
-        "config": { "result_format": "mp4" },
-        "presenter_config": { "crop": { "type": "rectangle" } },
-        "presenter_id": "amy-FLZ1USJl7m"
-    }
+def request_video_processing(audio_url, video_url):
+    url = 'https://api.synclabs.so/video'
     headers = {
-        "accept": "application/json",
-        "content-type": "application/json",
-        "authorization": "Bearer eyJhbGciOiJlkLmNvbS9zdHJpNvbS9zdHJpcGVfcHJviIiLCJodHRwczovL2QtaWQuY29tL3N0cmlwZV9iaWxsaW5nX2ludGVydmFsIjoibW9udGgiLCJodHRwczovL2QtaWQuY29tL3N0cmlwZV9wbGFuX2dyb3VwIjoiZGVpZC10cmlhbCIsImh0dHBzOi8vZC1pZC5jb20vc3RyaXBlX3ByaWNlX2lkIjoiIiwiaHR0cHM6Ly9kLWlkLmNvbS9zdHJpcGVfcHJpY2VfY3JlZGl0cyI6IiIsImh0dHBzOi8vZC1pZC5jb20vY2hhdF9zdHJpcGVfc3Vic2NyaXB0aW9uX2lkIjoiIiwiaHR0cHM6Ly9kLWlkLmNvbS9jaGF0X3N0cmlwZV9wcmljZV9jcmVkaXRzIjoiIiwiaHR0cHM6Ly9kLWlkLmNvbS9jaGF0X3N0cmlwZV9wcmljZV9pZCI6IiIsImh0dHBzOi8vZC1pZC5jb20vcHJvdmlkZXIiOiJnb29nbGUtb2F1dGgyIiwiaHR0cHM6Ly9kLWlkLmNvbS9pc19uZXciOmZhbHNlLCJodHRwczovL2QtaWQuY29tL2FwaV9rZXlfbW9kaWZpZWRfYXQiOiIyMDI0LTAyLTExVDA4OjU0OjM0LjAyOVoiLCJodHRwczovL2QtaWQuY29tL29yZ19pZCI6IiIsImh0dHBzOi8vZC1pZC5jb20vYXBwc192aXNpdGVkIjpbIlN0dWRpbyIsIkNoYXQiXSwiaHR0cHM6Ly9kLWlkLmNvbS9jeF9sb2dpY19pZCI6IiIsImh0dHBzOi8vZC1pZC5jb20vY3JlYXRpb25fdGltZXN0YW1wIjoiMjAyNC0wMi0xMVQwNzowNToxOS40MTRaIiwiaHR0cHM6Ly9kLWlkLmNvbS9hcGlfZ2F0ZXdheV9rZXlfaWQiOiJldTRieGljcHJmIiwiaHR0cHM6Ly9kLWlkLmNvbS91c2FnZV9pZGVudGlmaWVyX2tleSI6Iko2VmVnSmhiUFlNaXdFSEFLMThRNyIsImh0dHBzOi8vZC1pZC5jb20vaGFzaF9rZXkiOiJMZG1kc1JGY25nVXM2bmlkbjFyS3IiLCJodHRwczovL2QtaWQuY29tL3ByaW1hcnkiOnRydWUsImh0dHBzOi8vZC1pZC5jb20vZW1haWwiOiJyZWFwZXJnYW1pbmcxMzVAZ21haWwuY29tIiwiaHR0cHM6Ly9kLWlkLmNvbS9wYXltZW50X3Byb3ZpZGVyIjoic3RyaXBlIiwiaXNzIjoiaHR0cHM6Ly9hdXRoLmQtaWQuY29tLyIsInN1YiI6Imdvb2dsZS1vYXV0aDJ8MTA0MjMxNjE0MTQ5OTkxMTU5NjMxIiwiYXVkIjpbImh0dHBzOi8vZC1pZC51cy5hdXRoMC5jb20vYXBpL3YyLyIsImh0dHBzOi8vZC1pZC51cy5hdXRoMC5jb20vdXNlcmluZm8iXSwiaWF0IjoxNzA3NzMzNDg2LCJleHAiOjE3MDc4MTk4ODYsImF6cCI6Ikd6ck5JMU9yZTlGTTNFZURSZjNtM3ozVFN3MEpsUllxIiwic2NvcGUiOiJvcGVuaWQgcHJvZmlsZSBlbWFpbCByZWFkOmN1cnJlbnRfdXNlciB1cGRhdGU6Y3VycmVudF91c2VyX21ldGFkYXRhIG9mZmxpbmVfYWNjZXNzIn0.Ii0yGgl7HSS0AUTEMBkFH91f1uzxc1UcnluHaY7MBbq8mvYAfgsDkFzs1k7_doZHXfUru1X1f_Dv3odgMLS07jgB1ngDAO8cmuH9qUOi3A1kg05NJZqnw3A0-PcQ61W4yJz-RCEay9e_-Mz-MJiwMorxPA64DL-pGPyJKwkmNfaFKawOKXCBogpVXgfbdNcqM0lp2hiTCPElk1HOYHHmfzQi6_-08jdddCC0JT6lYXnDPWT5MWuxzzrkEjEi6XR3-d4jhMpBzsiwdaw6_eBcPs3ed-mYx_4Nq69p9Ud3oYyTH0X_5ltqebSz2RAlYLdyB3Rkdgy8NK8s6VxP0WEpcg"
+        'accept': 'application/json',
+        'x-api-key': API_KEY,
+        'Content-Type': 'application/json'
     }
-
-    response = requests.post(url, json=payload, headers=headers)
-    print(response.text)
+    payload = {
+        "audioUrl": audio_url,
+        "videoUrl": video_url,
+        "synergize": True,
+        "maxCredits": 800,
+        "webhookUrl": None,
+        "model": "sync-1.5-beta"
+    }
+    response = requests.post(url, headers=headers, json=payload)
     response_data = response.json()
     id = response_data.get('id')
-    print(f"Video_id: {id}")
     return id
 
 
-def generate_news_content():
-    # send a GET request to the page
+def get_latest_headline():
+    global latest_headline
     url = 'https://www.prnewswire.com/news-releases/news-releases-list/'
     response = requests.get(url)
-    # create a BeautifulSoup object
     soup = BeautifulSoup(response.text, 'html.parser')
-    # find the element with class 'card-title' and the text
-    ele = soup.find_all('h3')
-    ele.pop()
-    news_headlines = [j.text for j in ele]
-    return news_headlines
-
+    headlines = soup.find_all('h3')
+    headline_text = headlines[0].text.strip()
+    if headlines:
+        headline_text = headlines[0].text.strip()
+        if headline_text != latest_headline["text"]:
+            latest_headline = {"text": headline_text, "time": datetime.datetime.now()}
+            return headline_text
+    return None
 
 def generate_news_audio(headline):
-    api_key ="API_KEY"
+    api_key = os.environ.get("OPENAI_API_KEY")
     client = openai.Client(api_key=api_key)
     completion = client.chat.completions.create(
         model="gpt-3.5-turbo-0125",
         messages=[
-            {"role": "system", "content": "You are a AI News Anchor acting similar like a human in a way that cannot be easily detected by the way of speaking and generate the content like a news anchor based upon the headlines received."},
+            {"role": "system", "content": "You are a AI News Anchor acting similar like a human in a way that cannot be easily detected by the way of speaking and generate the content only in english like a news anchor based upon the headlines received, if headlines are in other languages translate to english"},
             {"role": "user", "content": headline}
         ]
     )
@@ -109,41 +113,11 @@ def generate_news_audio(headline):
     return response
 
 
-def download_video(url, filename):
-    response = requests.get(url)
-    with open(filename, 'wb') as f:
-        f.write(response.content)
-
-
-# # Path to the folder containing video files
-# folder_path = 'headlines'
-# # List all files in the folder
-# video_files = [f for f in os.listdir(
-#     folder_path) if os.path.isfile(os.path.join(folder_path, f))]
-# # Shuffle the list to play files in random order
-# random.shuffle(video_files)
-# # Convert list to queue for FIFO behavior
-# video_queue = video_files.copy()
-
-videos=["https://synchlabs-public.s3.amazonaws.com/Data/job_90e70bb6-1b8e-44c7-bcef-d956a314d0b0/result_90e70bb6-1b8e-44c7-bcef-d956a314d0b0.mp4","https://synchlabs-public.s3.amazonaws.com/Data/job_aea556a3-dc79-4a1e-bb0a-8b39c451ea55/result_aea556a3-dc79-4a1e-bb0a-8b39c451ea55.mp4","https://synchlabs-public.s3.amazonaws.com/Data/job_d09490e8-8f07-43e4-a46f-bf0da3ce7273/result_d09490e8-8f07-43e4-a46f-bf0da3ce7273.mp4"]
-
 @app.route('/video')
 def video():
     global videos
-    # Select a random video URL from the list
     video_url = random.choice(videos)
-    # Redirect to the video URL
     return redirect(video_url)
-
-
-# def play_video(video_path):
-#     with open(video_path, 'rb') as f:
-#         while True:
-#             # Read 1MB of data from the video file
-#             chunk = f.read(1024*1024)
-#             if not chunk:
-#                 break
-#             yield chunk
 
 
 @app.route('/video/<path:filename>')
@@ -151,5 +125,16 @@ def serve_video(filename):
     return send_from_directory('static', filename)
 
 
+@scheduler.task('interval', id='do_job_1', minutes=1, misfire_grace_time=900)
+def job1():
+    headline = get_latest_headline()
+    if headline:
+        # Proceed with generating and processing content for the new headline
+        scheduled_task()
+    else:
+        # No new headline found, no action needed
+        print("No new headline or duplicate headline found, skipping this cycle.")
+
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False)
