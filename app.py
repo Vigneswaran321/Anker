@@ -125,7 +125,7 @@ def serve_video(filename):
     return send_from_directory('static', filename)
 
 
-@scheduler.task('interval', id='do_job_1', minutes=1, misfire_grace_time=900)
+@scheduler.task('interval', id='do_job_1', minutes=25, misfire_grace_time=900)
 def job1():
     headline = get_latest_headline()
     if headline:
